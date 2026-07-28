@@ -9,6 +9,7 @@ Erzeugt aus einem **Jira-Ticket** direkt beim Generieren einen **belegten Releas
 | `releaseletter_pipeline.yml` | Importierbare Dify-Workflow-DSL (kompletter Graph inkl. Code + Prompts) |
 | `code/extract_prepare.py` | Code-Node „Extract & Prepare" (deterministische Extraktion + Guardrails) |
 | `code/pii_scrub.py` | Code-Node „PII-Scrub" (Sicherheitsnetz nach dem LLM) |
+| `jira_trigger.md` | Echter Jira-Trigger (n8n-Brücke **oder** Jira-Automation → Dify-API) |
 
 ## Import in Dify
 

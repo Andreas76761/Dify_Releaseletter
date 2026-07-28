@@ -1,0 +1,99 @@
+{
+  "name": "Jira -> Dify Bridge (Releaseletter)",
+  "nodes": [
+    {
+      "parameters": {
+        "events": [
+          "jira:issue_created",
+          "jira:issue_updated"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.jiraTrigger",
+      "typeVersion": 1,
+      "position": [
+        -280,
+        0
+      ],
+      "id": "jira-trigger",
+      "name": "Jira Trigger",
+      "webhookId": "onescm-jira-releaseletter",
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "name": "Jira SW Cloud"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// Jira Webhook -> unser jira_text Format\nconst root = $json.body || $json;\nconst issue = root.issue || root;\nconst F = issue.fields || {};\nconst nm = o => (o && o.name) ? o.name : \"\";\nconst arr = a => Array.isArray(a) ? a : [];\nfunction adf(n){ if(!n) return \"\"; if(typeof n===\"string\") return n; let s=n.text||\"\"; if(Array.isArray(n.content)){ for(const c of n.content){ s+=adf(c); } if(n.type===\"paragraph\"||n.type===\"heading\") s+=\"\\n\"; } return s; }\nconst desc = (typeof F.description===\"string\") ? F.description : adf(F.description);\nconst links = arr(F.issuelinks).map(l=>{\n  const t = l.type ? (l.type.outward || l.type.inward || \"linked\") : \"linked\";\n  const k = (l.outwardIssue && l.outwardIssue.key) || (l.inwardIssue && l.inwardIssue.key) || \"\";\n  return k ? (t + \" \" + k) : \"\";\n}).filter(Boolean).join(\"; \");\nconst lines = [\n  \"Projekt: \" + (F.project ? (F.project.key || F.project.name || \"\") : \"\"),\n  \"Vorgang: \" + (issue.key || \"\"),\n  \"Zusammenfassung: \" + (F.summary || \"\"),\n  \"Typ: \" + nm(F.issuetype),\n  \"Status: \" + nm(F.status),\n  \"Prioritaet: \" + nm(F.priority),\n  \"Komponente: \" + arr(F.components).map(nm).join(\", \"),\n  \"Loesung: \" + nm(F.resolution),\n  \"Labels: \" + arr(F.labels).join(\", \"),\n  \"Autor: \" + (F.reporter ? (F.reporter.displayName || \"\") : \"\"),\n  \"Bearbeiter: \" + (F.assignee ? (F.assignee.displayName || \"\") : \"Nicht zugewiesen\"),\n  \"Erstellt: \" + (F.created || \"\"),\n  \"Aktualisiert: \" + (F.updated || \"\"),\n  \"Loesungsversion(en): \" + (arr(F.fixVersions).map(nm).join(\", \") || \"Keine\"),\n  \"Betrifft Version(en): \" + (arr(F.versions).map(nm).join(\", \") || \"Keine\"),\n  \"Verknuepfungen: \" + links,\n  \"Beschreibung:\",\n  desc\n];\nreturn [{ json: { jira_text: lines.join(\"\\n\"), target_language: \"both\", country: \"DE\", division: \"\", user_group: \"biz\", issue_key: issue.key || \"\" } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        0
+      ],
+      "id": "jira-->-text",
+      "name": "Jira -> Text"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DIFY_API_URL || \"https://api.dify.ai/v1/workflows/run\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { inputs: { jira_text: $('Jira -> Text').item.json.jira_text, target_language: \"both\", country: \"DE\", division: \"\", user_group: \"biz\" }, response_mode: \"blocking\", user: \"jira-\" + ($('Jira -> Text').item.json.issue_key || \"unknown\") } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "dify-run",
+      "name": "Dify Workflow ausfuehren",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Dify API (Header Auth)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Jira Trigger": {
+      "main": [
+        [
+          {
+            "node": "Jira -> Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira -> Text": {
+      "main": [
+        [
+          {
+            "node": "Dify Workflow ausfuehren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [],
+  "meta": {
+    "templateId": "onescm-jira-dify-bridge"
+  }
+}
