@@ -1,0 +1,209 @@
+{
+  "name": "oneSCM Releaseletter-Generator",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        0
+      ],
+      "id": "trigger",
+      "name": "Start (manuell)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// Eingabe (Beispiel) — hier euer Jira-Ticket einfuegen oder per Webhook ersetzen\nreturn [{ json: {\n  jira_text: `Projekt: DOT ONESCM\nVorgang: ONESCM-10263\nZusammenfassung: Service Contract | Contract Preview PDF when vehicle data not available\nTyp: Test\nStatus: Reviewed\nPrioritaet: Hoch\nKomponente: 8 - Documents & Communications\nAutor: Lorand Markus\nBearbeiter: Nicht zugewiesen\nErstellt: 05/Feb/24\nBetrifft Version(en): Keine\nLoesungsversion(en): Keine\nVerknuepfungen: is cloned by ONESCM-14533; tests ONESCM-9045; relates to ONESCM-1846, ONESCM-8703\nBeschreibung:\nCurrent State: Contract Preview PDF cannot be generated when chassis/licence/Baumuster is missing.\nTarget State: Display the correct Contract Preview PDF even when vehicle data is not available.\nBusiness Flow: In Contract Generation select Chassis/Order/Model Code; TOGGLE First Registration date unavailable.\nAcceptance Criteria: When vehicle data is unavailable, the system displays the correct contract preview PDF.`,\n  target_language: \"both\",\n  country: \"DE\",\n  division: \"\",\n  user_group: \"biz\"\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        0
+      ],
+      "id": "eingabe-(beispiel)",
+      "name": "Eingabe (Beispiel)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// Extract & Prepare — deterministic Jira parsing + guardrails (no LLM)\nconst inp = $json;\nconst text = String(inp.jira_text || \"\");\nconst defs = [\n  [\"ticket\", /(?:Vorgang|Ticket|Issue|Key)\\s*[:\\-]\\s*([A-Z][A-Z0-9]+-\\d+)/i],\n  [\"summary\", /(?:Zusammenfassung|Summary|Titel|Title)\\s*[:\\-]\\s*(.+)/i],\n  [\"typ\", /(?:Vorgangstyp|Issue\\s*Type|Typ|Type)\\s*[:\\-]\\s*(.+)/i],\n  [\"status\", /(?:^|\\n)\\s*Status\\s*[:\\-]\\s*(.+)/i],\n  [\"prioritaet\", /(?:Priorit(?:ä|ae)t|Priority)\\s*[:\\-]\\s*(.+)/i],\n  [\"projekt\", /(?:Projekt|Project)\\s*[:\\-]\\s*(.+)/i],\n  [\"komponente\", /(?:Komponenten?|Components?)\\s*[:\\-]\\s*(.+)/i],\n  [\"resolution\", /(?:L(?:ö|oe)sung|Resolution)\\s*[:\\-]\\s*(.+)/i],\n  [\"labels\", /(?:Labels?|Stichw(?:ö|oe)rter|Beschriftungen)\\s*[:\\-]\\s*(.+)/i],\n  [\"autor\", /(?:Autor|Reporter|Ersteller)\\s*[:\\-]\\s*(.+)/i],\n  [\"bearbeiter\", /(?:Bearbeiter|Assignee|Zugewiesen an)\\s*[:\\-]\\s*(.+)/i],\n  [\"erstellt\", /(?:Erstellt|Created)\\s*[:\\-]\\s*(.+)/i],\n  [\"aktualisiert\", /(?:Aktualisiert|Updated|Ge(?:ä|ae)ndert)\\s*[:\\-]\\s*(.+)/i],\n  [\"fixversion\", /(?:Fix[- ]?Versions?|L(?:ö|oe)sungsversion(?:\\(en\\)|en)?)\\s*[:\\-]\\s*(.+)/i],\n  [\"affected\", /(?:Betrifft Version(?:\\(en\\)|en)?|Affects?\\s*Versions?|Betroffene Version(?:en)?)\\s*[:\\-]\\s*(.+)/i],\n  [\"verknuepfungen\", /(?:Verkn(?:ü|ue)pfungen|Linked issues|Links)\\s*[:\\-]\\s*(.+)/i],\n];\nconst f = {};\nfor (const [k, re] of defs) { const m = text.match(re); if (m && m[1]) f[k] = m[1].trim(); }\nconst isNone = v => !v || /keine|none/i.test(v);\nconst noVer = isNone(f.fixversion) && isNone(f.affected);\nconst pi_label = noVer ? \"PI TBD\" : (f.fixversion || f.affected);\nconst report_date = f.erstellt || \"unbekannt (Quelle pruefen)\";\nconst linked = (f.verknuepfungen || \"\").match(/[A-Z]+-\\d+/g) || [];\nconst linked_ids = [...new Set(linked)].sort().join(\", \");\nconst typ = f.typ || \"\";\nconst typ_norm = /test/i.test(typ) ? \"Testfall / Validierung\" : (typ || \"unbekannt\");\nconst sec = n => { const m = text.match(new RegExp(n + \"\\\\s*[:\\\\-]\\\\s*([^\\\\n]+)\", \"i\")); return m ? m[1].trim() : \"\"; };\nconst desc = { current: sec(\"Current State\"), target: sec(\"Target State\"), flow: sec(\"Business Flow\"), extra: sec(\"Extra Details\"), accept: sec(\"Acceptance Criteria\") };\nconst pii = [];\nif (/\\b[\\w.+-]+@[\\w-]+\\.[\\w.-]+\\b/.test(text)) pii.push(\"E-Mail\");\nif (/\\b[A-HJ-NPR-Z0-9]{17}\\b/.test(text)) pii.push(\"FIN/VIN\");\nif (/\\b[A-ZÄÖÜ]{1,3}-[A-Z]{1,2}\\s?\\d{1,4}\\b/.test(text)) pii.push(\"Kennzeichen\");\nfor (const n of [f.autor, f.bearbeiter]) { if (n && !/nicht zugewiesen|unassigned/i.test(n)) pii.push(\"Name: \" + n); }\nconst pii_found = pii.length ? pii.join(\"; \") : \"keine\";\nconst L = [];\nconst add = (lab, v) => { if (v) L.push(\"- \" + lab + \": \" + v); };\nadd(\"Referenz\", f.ticket); add(\"Titel\", f.summary);\nadd(\"Vorgangstyp (wahrheitsgemaess)\", typ_norm); add(\"Status (woertlich)\", f.status);\nadd(\"Prioritaet\", f.prioritaet); add(\"Projekt\", f.projekt);\nadd(\"Komponente\", f.komponente); add(\"Resolution\", f.resolution);\nadd(\"Labels\", f.labels); add(\"Release/Version\", pi_label);\nadd(\"Datum (aus 'Erstellt')\", report_date);\nadd(\"Aktueller Zustand\", desc.current); add(\"Zielzustand\", desc.target);\nadd(\"Ablauf\", desc.flow); add(\"Zusaetzliche Details\", desc.extra); add(\"Abnahmekriterien\", desc.accept);\nconst facts = L.join(\"\\n\");\nconst ug = { mgmt: \"Management: Kurzfassung, nur belegte Fakten, keine Marketing-Aussagen.\", biz: \"Fachbereich: sachlich, ausgewogen.\", it: \"IT/Entwicklung: technische Metadaten inkl. Labels/Komponente.\", end: \"Endanwender: einfache Sprache, minimale Metadaten.\" };\nconst guidance = \"Land \" + (inp.country || \"DE\") + \", Sparte \" + (inp.division || \"-\") + \" - \" + (ug[inp.user_group] || ug.biz);\nconst w = [];\nif (/test/i.test(typ)) w.push(\"Quelle ist Typ 'Test' -> nicht als Feature darstellen.\");\nif (noVer) w.push(\"Keine Version in Quelle -> PI TBD, keine PI erfinden.\");\nif (linked_ids) w.push(\"Verlinkte Tickets NICHT als Inhalt/Scope: \" + linked_ids);\nif (pii_found !== \"keine\") w.push(\"Personenbezogene Daten vorhanden -> anonymisieren: \" + pii_found);\nconst warnings = w.length ? w.map(x => \"- \" + x).join(\"\\n\") : \"- keine\";\n\nconst sys_de = [\n\"Du bist Release-Redakteur fuer oneSCM. Erstelle einen deutschen Releaseletter AUSSCHLIESSLICH aus den belegten Fakten. Erfinde nichts.\",\n\"HARTE REGELN:\",\n\"1) DATUM: nutze ausschliesslich \" + report_date + \" (Jira 'Erstellt'). Niemals das heutige/Laufdatum.\",\n\"2) VERSION: nutze ueberall \" + pi_label + \". Erfinde keine Quartals-/PI-Version.\",\n\"3) UMFANG: Inhalt ist NUR der referenzierte Vorgang. Verlinkte Tickets (\" + (linked_ids || \"keine\") + \") NICHT als eigene Zeilen aufnehmen.\",\n\"4) STATUS & TYP: Status woertlich. Typ wahrheitsgemaess (Test -> 'Testfall/Validierung', nie 'Feature'). Nicht belegte Nutzenaussagen mit '[redaktionell]' kennzeichnen.\",\n\"5) DATENSCHUTZ: keine personenbezogenen Daten. Verfasser immer 'oneSCM Team'. Vorpruefung: \" + pii_found + \".\",\n\"ZIELGRUPPE: \" + guidance,\n\"PRUEFHINWEISE:\\n\" + warnings\n].join(\"\\n\");\nconst usr_de = \"FAKTEN (belegt aus Jira):\\n\" + facts;\nconst sys_en = \"Translate the German release letter into precise professional English. Keep ALL facts, numbers, IDs, dates and the version label identical. Keep product terms (oneSCM, ONESCM-..., Xray, Baumuster, VIN/FIN, Built to order/stock) unchanged. Keep '[redaktionell]' as '[editorial]'. Do not add or remove content.\";\nconst sys_sum = \"Fasse den Ticket-Inhalt neutral und belegt zusammen. Erfinde nichts. Gib genau aus:\\nDE: <2-3 Saetze>\\nEN: <2-3 sentences>\";\nconst usr_sum = \"FAKTEN:\\n\" + facts + \"\\nVersion: \" + pi_label + \" | Datum: \" + report_date + \" | Verlinkt (nicht Inhalt): \" + (linked_ids || \"keine\");\n\nreturn [{ json: { facts, pi_label, report_date, linked_ids: linked_ids || \"keine\", pii_found, guidance, warnings, target_language: inp.target_language || \"both\", sys_de, usr_de, sys_en, sys_sum, usr_sum } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "extract-and-prepare",
+      "name": "Extract & Prepare"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_API_URL || \"https://api.openai.com/v1/chat/completions\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: ($env.LLM_MODEL || \"gpt-4o\"), temperature: 0.2, messages: [ { role: \"system\", content: $('Extract & Prepare').item.json.sys_de }, { role: \"user\", content: $('Extract & Prepare').item.json.usr_de } ] } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        0
+      ],
+      "id": "llm-releaseletter-de",
+      "name": "LLM Releaseletter DE",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "LLM API (Header Auth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_API_URL || \"https://api.openai.com/v1/chat/completions\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: ($env.LLM_MODEL || \"gpt-4o\"), temperature: 0.2, messages: [ { role: \"system\", content: $('Extract & Prepare').item.json.sys_en }, { role: \"user\", content: $('LLM Releaseletter DE').item.json.choices[0].message.content } ] } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "llm-uebersetzung-en",
+      "name": "LLM Uebersetzung EN",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "LLM API (Header Auth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_API_URL || \"https://api.openai.com/v1/chat/completions\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: ($env.LLM_MODEL || \"gpt-4o\"), temperature: 0.2, messages: [ { role: \"system\", content: $('Extract & Prepare').item.json.sys_sum }, { role: \"user\", content: $('Extract & Prepare').item.json.usr_sum } ] } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "llm-zusammenfassung",
+      "name": "LLM Zusammenfassung",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "LLM API (Header Auth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// Merge & PII-Scrub — safety net after the LLMs\nconst path = o => { try { return o.choices[0].message.content; } catch(e){ try { return o.content[0].text; } catch(e2){ return \"\"; } } };\nlet de = path($('LLM Releaseletter DE').item.json) || \"\";\nlet en = path($('LLM Uebersetzung EN').item.json) || \"\";\nlet sum = path($('LLM Zusammenfassung').item.json) || \"\";\nconst P = [\n  [/\\b[\\w.+-]+@[\\w-]+\\.[\\w.-]+\\b/g, \"[E-Mail entfernt]\", \"E-Mail\"],\n  [/\\b[A-HJ-NPR-Z0-9]{17}\\b/g, \"[FIN/VIN entfernt]\", \"FIN/VIN\"],\n  [/\\b[A-ZÄÖÜ]{1,3}-[A-Z]{1,2}\\s?\\d{1,4}\\b/g, \"[Kennzeichen entfernt]\", \"Kennzeichen\"],\n  [/\\b[Uu](?:ID|SR)?\\d{5,}\\b/g, \"[User-ID entfernt]\", \"User-ID\"],\n];\nconst hits = new Set();\nconst scrub = t => { let s = t; for (const [re, rep, lab] of P) { if (re.test(s)) { hits.add(lab); s = s.replace(re, rep); } } return s; };\nde = scrub(de); en = scrub(en); sum = scrub(sum);\nconst ex = $('Extract & Prepare').item.json;\nreturn [{ json: {\n  releaseletter_de: de,\n  releaseletter_en: en,\n  zusammenfassung: sum,\n  fakten: ex.facts,\n  warnungen: ex.warnings,\n  pii_entfernt: hits.size ? [...hits].join(\", \") : \"keine\"\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        0
+      ],
+      "id": "merge-and-pii-scrub",
+      "name": "Merge & PII-Scrub"
+    }
+  ],
+  "connections": {
+    "Start (manuell)": {
+      "main": [
+        [
+          {
+            "node": "Eingabe (Beispiel)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eingabe (Beispiel)": {
+      "main": [
+        [
+          {
+            "node": "Extract & Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Prepare": {
+      "main": [
+        [
+          {
+            "node": "LLM Releaseletter DE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Releaseletter DE": {
+      "main": [
+        [
+          {
+            "node": "LLM Uebersetzung EN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Uebersetzung EN": {
+      "main": [
+        [
+          {
+            "node": "LLM Zusammenfassung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Zusammenfassung": {
+      "main": [
+        [
+          {
+            "node": "Merge & PII-Scrub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [],
+  "meta": {
+    "templateId": "onescm-releaseletter"
+  }
+}
