@@ -1,0 +1,374 @@
+# =====================================================================
+# Dify Workflow DSL — "oneSCM Releaseletter-Generator"
+# Import in Dify:  Studio → Create App → Import DSL → upload this file.
+#
+# Pipeline:  Start → Extract & Prepare (Code) → Releaseletter DE (LLM)
+#            → Übersetzung EN (LLM) → Zusammenfassung DE/EN (LLM)
+#            → PII-Scrub (Code) → End
+#
+# After import you MUST re-select the model in each LLM node (the model
+# provider/name below are placeholders). The two Code nodes contain the
+# full Python from dify/code/extract_prepare.py and dify/code/pii_scrub.py.
+# =====================================================================
+app:
+  name: oneSCM Releaseletter-Generator
+  description: Erzeugt aus einem Jira-Ticket einen belegten Releaseletter (DE + EN) plus Zusammenfassung, mit Guardrails gegen Datum-, PI-, Phantom-, Status- und PII-Fehler.
+  icon: "🛡️"
+  icon_background: "#EFF1F5"
+  mode: workflow
+kind: app
+version: 0.1.5
+workflow:
+  environment_variables: []
+  conversation_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ""
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    suggested_questions: []
+    text_to_speech:
+      enabled: false
+  graph:
+    edges:
+      - id: e1
+        source: start
+        target: extract
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data: { sourceType: start, targetType: code, isInIteration: false }
+      - id: e2
+        source: extract
+        target: llm_de
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data: { sourceType: code, targetType: llm, isInIteration: false }
+      - id: e3
+        source: llm_de
+        target: llm_en
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data: { sourceType: llm, targetType: llm, isInIteration: false }
+      - id: e4
+        source: llm_en
+        target: summary
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data: { sourceType: llm, targetType: llm, isInIteration: false }
+      - id: e5
+        source: summary
+        target: scrub
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data: { sourceType: llm, targetType: code, isInIteration: false }
+      - id: e6
+        source: scrub
+        target: end
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data: { sourceType: code, targetType: end, isInIteration: false }
+    nodes:
+      - id: start
+        type: custom
+        position: { x: 40, y: 260 }
+        data:
+          type: start
+          title: Start
+          desc: Jira-Ticket + Zielgruppe
+          variables:
+            - variable: jira_text
+              label: Jira-Ticket (Text/Export)
+              type: paragraph
+              required: true
+              max_length: 20000
+            - variable: target_language
+              label: Zielsprache
+              type: select
+              required: true
+              default: both
+              options: [de, en, both]
+            - variable: country
+              label: Land / Markt
+              type: text-input
+              required: false
+              default: DE
+              max_length: 40
+            - variable: division
+              label: Sparte
+              type: text-input
+              required: false
+              default: ""
+              max_length: 40
+            - variable: user_group
+              label: Usergruppe
+              type: select
+              required: false
+              default: biz
+              options: [mgmt, biz, it, end]
+      - id: extract
+        type: custom
+        position: { x: 340, y: 260 }
+        data:
+          type: code
+          title: Extract & Prepare
+          desc: Deterministische Feld-Extraktion + Guardrails (kein LLM)
+          code_language: python3
+          variables:
+            - variable: jira_text
+              value_selector: [start, jira_text]
+            - variable: target_language
+              value_selector: [start, target_language]
+            - variable: country
+              value_selector: [start, country]
+            - variable: division
+              value_selector: [start, division]
+            - variable: user_group
+              value_selector: [start, user_group]
+          outputs:
+            facts: { type: string }
+            pi_label: { type: string }
+            report_date: { type: string }
+            linked_ids: { type: string }
+            pii_found: { type: string }
+            guidance: { type: string }
+            warnings: { type: string }
+            target_language: { type: string }
+          code: |
+            import re
+            FIELD_DEFS = [
+                ("ticket", r"(?:Vorgang|Ticket|Issue|Key)\s*[:\-]\s*([A-Z][A-Z0-9]+-\d+)"),
+                ("summary", r"(?:Zusammenfassung|Summary|Titel|Title)\s*[:\-]\s*(.+)"),
+                ("typ", r"(?:Vorgangstyp|Issue\s*Type|Typ|Type)\s*[:\-]\s*(.+)"),
+                ("status", r"(?:^|\n)\s*Status\s*[:\-]\s*(.+)"),
+                ("prioritaet", r"(?:Priorit(?:ä|ae)t|Priority)\s*[:\-]\s*(.+)"),
+                ("projekt", r"(?:Projekt|Project)\s*[:\-]\s*(.+)"),
+                ("komponente", r"(?:Komponenten?|Components?)\s*[:\-]\s*(.+)"),
+                ("resolution", r"(?:L(?:ö|oe)sung|Resolution)\s*[:\-]\s*(.+)"),
+                ("labels", r"(?:Labels?|Stichw(?:ö|oe)rter|Beschriftungen)\s*[:\-]\s*(.+)"),
+                ("autor", r"(?:Autor|Reporter|Ersteller)\s*[:\-]\s*(.+)"),
+                ("bearbeiter", r"(?:Bearbeiter|Assignee|Zugewiesen an)\s*[:\-]\s*(.+)"),
+                ("erstellt", r"(?:Erstellt|Created)\s*[:\-]\s*(.+)"),
+                ("aktualisiert", r"(?:Aktualisiert|Updated|Ge(?:ä|ae)ndert)\s*[:\-]\s*(.+)"),
+                ("fixversion", r"(?:Fix[- ]?Versions?|L(?:ö|oe)sungsversion(?:\(en\)|en)?)\s*[:\-]\s*(.+)"),
+                ("affected", r"(?:Betrifft Version(?:\(en\)|en)?|Affects?\s*Versions?|Betroffene Version(?:en)?)\s*[:\-]\s*(.+)"),
+                ("verknuepfungen", r"(?:Verkn(?:ü|ue)pfungen|Linked issues|Links)\s*[:\-]\s*(.+)"),
+            ]
+            def _extract(text):
+                out = {}
+                for key, pat in FIELD_DEFS:
+                    m = re.search(pat, text, re.IGNORECASE)
+                    if m and m.group(1):
+                        out[key] = m.group(1).strip()
+                return out
+            def _is_none(v):
+                return (not v) or bool(re.search(r"keine|none", v, re.I))
+            def main(jira_text, target_language="both", country="DE", division="", user_group="biz"):
+                text = jira_text or ""
+                f = _extract(text)
+                no_version = _is_none(f.get("fixversion","")) and _is_none(f.get("affected",""))
+                pi_label = "PI TBD" if no_version else (f.get("fixversion") or f.get("affected"))
+                report_date = f.get("erstellt","") or "unbekannt (Quelle pruefen)"
+                linked = re.findall(r"[A-Z]+-\d+", f.get("verknuepfungen","") or "")
+                linked_ids = ", ".join(sorted(set(linked)))
+                typ = f.get("typ","")
+                typ_norm = "Testfall / Validierung" if re.search(r"test", typ, re.I) else (typ or "unbekannt")
+                def _sec(name):
+                    m = re.search(name + r"\s*[:\-]\s*([^\n]+)", text, re.I)
+                    return m.group(1).strip() if m else ""
+                desc = {"current": _sec("Current State"), "target": _sec("Target State"),
+                        "flow": _sec("Business Flow"), "extra": _sec("Extra Details"),
+                        "accept": _sec("Acceptance Criteria")}
+                pii = []
+                if re.search(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", text): pii.append("E-Mail")
+                if re.search(r"\b[A-HJ-NPR-Z0-9]{17}\b", text): pii.append("FIN/VIN")
+                if re.search(r"\b[A-ZÄÖÜ]{1,3}-[A-Z]{1,2}\s?\d{1,4}\b", text): pii.append("Kennzeichen")
+                for n in (f.get("autor",""), f.get("bearbeiter","")):
+                    if n and not re.search(r"nicht zugewiesen|unassigned", n, re.I): pii.append("Name: " + n)
+                pii_found = "; ".join(pii) if pii else "keine"
+                lines = []
+                def add(label, val):
+                    if val: lines.append("- %s: %s" % (label, val))
+                add("Referenz", f.get("ticket")); add("Titel", f.get("summary"))
+                add("Vorgangstyp (wahrheitsgemaess)", typ_norm); add("Status (woertlich)", f.get("status"))
+                add("Prioritaet", f.get("prioritaet")); add("Projekt", f.get("projekt"))
+                add("Komponente", f.get("komponente")); add("Resolution", f.get("resolution"))
+                add("Labels", f.get("labels")); add("Release/Version", pi_label)
+                add("Datum (aus 'Erstellt')", report_date)
+                add("Aktueller Zustand", desc["current"]); add("Zielzustand", desc["target"])
+                add("Ablauf", desc["flow"]); add("Zusaetzliche Details", desc["extra"])
+                add("Abnahmekriterien", desc["accept"])
+                facts = "\n".join(lines)
+                ug_map = {"mgmt":"Management: Kurzfassung, nur belegte Fakten, keine Marketing-Aussagen.",
+                          "biz":"Fachbereich: sachlich, ausgewogen.",
+                          "it":"IT/Entwicklung: technische Metadaten inkl. Labels/Komponente.",
+                          "end":"Endanwender: einfache Sprache, minimale Metadaten."}
+                guidance = "Land %s, Sparte %s - %s" % (country, division or "-", ug_map.get(user_group, ug_map["biz"]))
+                w = []
+                if re.search(r"test", typ, re.I): w.append("Quelle ist Typ 'Test' -> nicht als Feature darstellen.")
+                if no_version: w.append("Keine Version in Quelle -> PI TBD, keine PI erfinden.")
+                if linked_ids: w.append("Verlinkte Tickets NICHT als Inhalt/Scope: %s" % linked_ids)
+                if pii_found != "keine": w.append("Personenbezogene Daten vorhanden -> anonymisieren: %s" % pii_found)
+                return {"facts": facts, "pi_label": pi_label, "report_date": report_date,
+                        "linked_ids": linked_ids or "keine", "pii_found": pii_found,
+                        "guidance": guidance, "warnings": "\n".join("- " + x for x in w) if w else "- keine",
+                        "target_language": target_language or "both"}
+      - id: llm_de
+        type: custom
+        position: { x: 640, y: 260 }
+        data:
+          type: llm
+          title: Releaseletter DE
+          desc: Deutscher Releaseletter, strikt aus den Fakten
+          model:
+            provider: openai
+            name: gpt-4o
+            mode: chat
+            completion_params: { temperature: 0.2 }
+          context: { enabled: false, variable_selector: [] }
+          vision: { enabled: false }
+          prompt_template:
+            - role: system
+              text: |
+                Du bist Release-Redakteur fuer oneSCM. Erstelle einen deutschen Releaseletter
+                AUSSCHLIESSLICH aus den unten stehenden belegten Fakten. Erfinde nichts.
+
+                HARTE REGELN
+                1) DATUM: Nutze ausschliesslich {{#extract.report_date#}} (Jira "Erstellt"). Niemals das heutige/Laufdatum.
+                2) VERSION: Nutze ueberall {{#extract.pi_label#}}. Erfinde keine Quartals-/PI-Version (z. B. "PI 2024.4").
+                3) UMFANG: Inhalt ist NUR der referenzierte Vorgang. Verlinkte Tickets ({{#extract.linked_ids#}})
+                   NICHT als eigene Key-Change-/Scope-/Traceability-Zeilen aufnehmen.
+                4) STATUS & TYP: Status woertlich uebernehmen. Typ wahrheitsgemaess (Test -> "Testfall/Validierung",
+                   niemals "Feature"). Nicht durch Quelle belegte Nutzen-/Business-Aussagen mit "[redaktionell]" kennzeichnen.
+                5) DATENSCHUTZ: Keine personenbezogenen Daten (Namen, E-Mail, FIN/VIN, Kennzeichen, User-ID).
+                   Als Verfasser immer "oneSCM Team". Hinweis der Vorpruefung: {{#extract.pii_found#}}.
+
+                ZIELGRUPPE: {{#extract.guidance#}}
+                PRUEFHINWEISE:
+                {{#extract.warnings#}}
+
+                STRUKTUR (nur Abschnitte mit belegtem Inhalt):
+                Titel | Metadaten (Referenz, Typ, Status, Prioritaet, Projekt, Komponente, Release/Version {{#extract.pi_label#}}, Datum {{#extract.report_date#}})
+                | Zusammenfassung | Wesentliche Aenderung | Business Benefits (nur belegt, sonst "[redaktionell]") | Hinweis.
+            - role: user
+              text: |
+                FAKTEN (belegt aus Jira):
+                {{#extract.facts#}}
+          memory: null
+      - id: llm_en
+        type: custom
+        position: { x: 940, y: 260 }
+        data:
+          type: llm
+          title: Uebersetzung EN
+          desc: Englische Fassung des deutschen Releaseletters
+          model:
+            provider: openai
+            name: gpt-4o
+            mode: chat
+            completion_params: { temperature: 0.1 }
+          context: { enabled: false, variable_selector: [] }
+          vision: { enabled: false }
+          prompt_template:
+            - role: system
+              text: |
+                Translate the following German release letter into precise, professional English.
+                Keep ALL facts, numbers, IDs, dates and the version label identical. Do not add or remove content.
+                Keep proper nouns and product terms (oneSCM, ONESCM-..., Xray, Baumuster, VIN/FIN, Built to order/stock) unchanged.
+                Keep any "[redaktionell]" marker as "[editorial]".
+            - role: user
+              text: |
+                {{#llm_de.text#}}
+          memory: null
+      - id: summary
+        type: custom
+        position: { x: 1240, y: 260 }
+        data:
+          type: llm
+          title: Zusammenfassung DE/EN
+          desc: Kurze Inhaltszusammenfassung in beiden Sprachen
+          model:
+            provider: openai
+            name: gpt-4o
+            mode: chat
+            completion_params: { temperature: 0.2 }
+          context: { enabled: false, variable_selector: [] }
+          vision: { enabled: false }
+          prompt_template:
+            - role: system
+              text: |
+                Fasse den Ticket-Inhalt neutral und belegt zusammen. Erfinde nichts. Nutze nur die Fakten.
+                Gib GENAU dieses Format aus:
+                DE: <2-3 Saetze deutsch>
+                EN: <2-3 sentences english>
+            - role: user
+              text: |
+                FAKTEN:
+                {{#extract.facts#}}
+                Version: {{#extract.pi_label#}} | Datum: {{#extract.report_date#}} | Verlinkt (nicht Inhalt): {{#extract.linked_ids#}}
+          memory: null
+      - id: scrub
+        type: custom
+        position: { x: 1540, y: 260 }
+        data:
+          type: code
+          title: PII-Scrub
+          desc: Sicherheitsnetz - maskiert personenbezogene Daten
+          code_language: python3
+          variables:
+            - variable: text_de
+              value_selector: [llm_de, text]
+            - variable: text_en
+              value_selector: [llm_en, text]
+          outputs:
+            clean_de: { type: string }
+            clean_en: { type: string }
+            removed: { type: string }
+          code: |
+            import re
+            PATTERNS = [
+                (r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", "[E-Mail entfernt]", "E-Mail"),
+                (r"\b[A-HJ-NPR-Z0-9]{17}\b", "[FIN/VIN entfernt]", "FIN/VIN"),
+                (r"\b[A-ZÄÖÜ]{1,3}-[A-Z]{1,2}\s?\d{1,4}\b", "[Kennzeichen entfernt]", "Kennzeichen"),
+                (r"\b[Uu](?:ID|SR)?\d{5,}\b", "[User-ID entfernt]", "User-ID"),
+            ]
+            def _scrub(text):
+                t = text or ""
+                hits = set()
+                for pat, repl, label in PATTERNS:
+                    if re.search(pat, t):
+                        hits.add(label); t = re.sub(pat, repl, t)
+                return t, hits
+            def main(text_de="", text_en=""):
+                de, h1 = _scrub(text_de)
+                en, h2 = _scrub(text_en)
+                removed = ", ".join(sorted(h1 | h2)) if (h1 | h2) else "keine"
+                return {"clean_de": de, "clean_en": en, "removed": removed}
+      - id: end
+        type: custom
+        position: { x: 1840, y: 260 }
+        data:
+          type: end
+          title: End
+          outputs:
+            - variable: releaseletter_de
+              value_selector: [scrub, clean_de]
+            - variable: releaseletter_en
+              value_selector: [scrub, clean_en]
+            - variable: zusammenfassung
+              value_selector: [summary, text]
+            - variable: fakten
+              value_selector: [extract, facts]
+            - variable: warnungen
+              value_selector: [extract, warnings]
+            - variable: pii_entfernt
+              value_selector: [scrub, removed]
+    viewport: { x: 0, y: 0, zoom: 0.6 }
