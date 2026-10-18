@@ -313,6 +313,7 @@
   #results:-webkit-full-screen{background:var(--bg);padding:22px 30px;overflow:auto}
   table.cmp td.mine{background:var(--accent-soft);color:var(--accent-ink);font-weight:500}
   table.cmp td.rec{font-size:12px;color:var(--ink-soft)}
+  .ki-de{display:block;margin-top:4px;color:var(--accent-ink);background:var(--accent-soft);border-radius:3px;padding:2px 6px;font-size:11.5px;white-space:normal;line-height:1.4}
   /* dashboard improvement measures */
   .dmcard{border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:9px;background:var(--panel-2)}
   .dmcard.checked{background:var(--pass-bg);border-left-color:var(--pass)}
@@ -1063,7 +1064,7 @@ const I18N = {
     verdict_ok_t:"Keine kritischen Abweichungen gefunden. Empfehlungen prüfen und freigeben.",
     kpi_fail:"Kritische Fehler", kpi_warn:"Warnungen", kpi_hint:"Hinweise", kpi_pii:"PII-Fundstellen",
     b1:"Vergleichstabelle", b1d:"Feld · Quelle · Dify · Delta · Empfehlung · meine Lösung",
-    th_delta:"Delta", th_rec:"Empfehlung", th_mine:"Meine Lösung",
+    th_delta:"Delta", th_rec:"Empfehlung", th_mine:"Meine Lösung", b1_ai:"🌐 Englisch per Browser-KI übersetzen",
     delta_identical:"identisch", delta_differ:"abweichend", delta_missing:"fehlt", delta_invented:"erfunden", delta_phantom:"halluziniert",
     tb_fs:"Vollbild", tb_win:"Neues Fenster", tb_print:"Drucken/PDF",
     b2:"Prüfregeln", b2d:"Regelkatalog Quelle ↔ Ergebnis",
@@ -1149,7 +1150,7 @@ const I18N = {
     verdict_ok_t:"No critical deviations found. Review recommendations and release.",
     kpi_fail:"Critical errors", kpi_warn:"Warnings", kpi_hint:"Notes", kpi_pii:"PII findings",
     b1:"Comparison table", b1d:"Field · source · Dify · delta · recommendation · my solution",
-    th_delta:"Delta", th_rec:"Recommendation", th_mine:"My solution",
+    th_delta:"Delta", th_rec:"Recommendation", th_mine:"My solution", b1_ai:"🌐 Translate English with browser AI",
     delta_identical:"identical", delta_differ:"differs", delta_missing:"missing", delta_invented:"invented", delta_phantom:"hallucinated",
     tb_fs:"Fullscreen", tb_win:"New window", tb_print:"Print/PDF",
     b2:"Check rules", b2d:"Rule catalogue source ↔ result",
@@ -1925,8 +1926,8 @@ function renderResults(){
   for(const r of comparison){
     cmpRows+=`<tr>
       <td class="field-name">${escapeHtml(r.label)}</td>
-      <td class="val">${escapeHtml(r.src)}</td>
-      <td class="val">${escapeHtml(r.dify)}</td>
+      <td class="val b1cell">${escapeHtml(r.src)}</td>
+      <td class="val b1cell">${escapeHtml(r.dify)}</td>
       <td><span class="pill ${DELTA_PILL[r.delta]}">${t("delta_"+r.delta)}</span></td>
       <td class="rec">${escapeHtml(r.rec)}</td>
       <td class="val mine">${escapeHtml(r.mine)}</td></tr>`;
@@ -1987,8 +1988,9 @@ function renderResults(){
     </section>`;
   const B01=`
     <section class="block">
-      <div class="bhead"><span class="num">01</span><h3>${t("b1")}</h3><span class="desc">${t("b1d")}</span></div>
-      <div class="bbody"><div class="tscroll"><table class="cmp">
+      <div class="bhead"><span class="num">01</span><h3>${t("b1")}</h3><span class="desc">${t("b1d")}</span>
+        <span class="bhead-tools"><button class="btn ghost" style="padding:6px 12px;font-size:12.5px" onclick="aiBlock01(this)">${t("b1_ai")}</button></span></div>
+      <div class="bbody"><div class="tscroll"><table class="cmp" id="cmp-b01">
         <thead><tr><th>${t("th_field")}</th><th>${t("th_jira")}</th><th>Dify</th><th>${t("th_delta")}</th><th>${t("th_rec")}</th><th>${t("th_mine")}</th></tr></thead>
         <tbody>${cmpRows}</tbody></table></div></div>
     </section>`;
@@ -2772,6 +2774,26 @@ async function aiCompare(i, btn){
   }
   btn.disabled=false;
   btn.textContent = n ? (de?`✓ ${n} per KI übersetzt`:`✓ ${n} AI-translated`) : (de?"keine Übersetzung möglich":"no translation available");
+  setTimeout(()=>btn.textContent=orig,3000);
+}
+async function aiBlock01(btn){
+  const de=LANG==="de"; const orig=btn.textContent; btn.disabled=true; btn.textContent="…";
+  const to=(pr,ms)=>Promise.race([Promise.resolve(pr).catch(()=>null), new Promise(r=>setTimeout(()=>r(null),ms))]);
+  const tr=await getTranslator();
+  if(!tr || typeof tr.translate!=="function"){ btn.disabled=false; btn.textContent=de?"Browser-KI nicht verfügbar":"Browser AI unavailable"; setTimeout(()=>btn.textContent=orig,2600); return; }
+  const cells=[...document.querySelectorAll("#cmp-b01 .b1cell")];
+  let n=0;
+  for(const cell of cells){
+    if(cell.querySelector(".ki-de")) continue;                 // schon übersetzt
+    const txt=cell.textContent.trim();
+    if(txt==="—" || !_remainingEnglish(txt).length) continue;  // nichts Englisches
+    const out=await to(tr.translate(txt), 7000);
+    if(out && out.trim() && out.trim()!==txt){
+      const div=document.createElement("div"); div.className="ki-de"; div.textContent="DE: "+out; cell.appendChild(div); n++;
+    }
+  }
+  btn.disabled=false;
+  btn.textContent = n ? (de?`✓ ${n} Zelle(n) übersetzt`:`✓ ${n} cell(s) translated`) : (de?"nichts zu übersetzen":"nothing to translate");
   setTimeout(()=>btn.textContent=orig,3000);
 }
 function toggleCompare(i, btn){
