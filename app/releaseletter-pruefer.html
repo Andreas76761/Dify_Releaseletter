@@ -454,7 +454,8 @@
       <button class="btn primary" onclick="runAnalyse()" data-i18n="an2_run">Analysieren</button>
       <button class="btn ghost" onclick="loadAnalyseExamples()" data-i18n="an2_ex">Beispiele laden</button>
       <button class="btn ghost" onclick="resetWhitelist()" data-i18n="an2_wreset">Whitelist zurücksetzen</button>
-      <button class="btn ghost" onclick="exportWhitelist(this)" data-i18n="an2_wexp">Whitelist exportieren</button>
+      <button class="btn ghost" onclick="exportWhitelist(this)" data-i18n="an2_wexp">Export .txt</button>
+      <button class="btn ghost" onclick="exportWhitelistJSON(this)" data-i18n="an2_wexpj">Export .json</button>
       <label class="btn ghost"><span data-i18n="an2_wimp">Whitelist importieren</span><input type="file" id="an-wimport" accept=".txt,.csv,.json,.md" hidden onchange="importWhitelist(this)"></label>
       <span class="spacer"></span>
       <span class="hint-inline" data-i18n="an2_hint">Heuristische Prüfung im Browser — ersetzt kein professionelles Lektorat.</span>
@@ -1111,7 +1112,7 @@ const I18N = {
     tab_analyse:"Analyse",
     an2_sub:"Prüft deutschen und englischen Text auf Rechtschreibung, Satzstellung und Grammatik und zeigt Übersetzungsfehler zwischen beiden Versionen. Für die Übersetzungsprüfung sollten beide Felder dieselbe Ticket-Version in DE und EN enthalten.",
     an2_de:"Deutscher Text", an2_en:"Englischer Text", an2_run:"Analysieren", an2_ex:"Beispiele laden",
-    an2_white:"Eigene Begriffe / Produktnamen (nicht als Fehler werten) — kommagetrennt", an2_wreset:"Whitelist zurücksetzen", an2_wexp:"Whitelist exportieren", an2_wimp:"Whitelist importieren",
+    an2_white:"Eigene Begriffe / Produktnamen (nicht als Fehler werten) — kommagetrennt", an2_wreset:"Whitelist zurücksetzen", an2_wexp:"Export .txt", an2_wexpj:"Export .json", an2_wimp:"Whitelist importieren",
     an2_hint:"Heuristische Prüfung im Browser — ersetzt kein professionelles Lektorat.",
     an2_none:"Keine Auffälligkeiten gefunden.",
     sec_de:"Deutsch — Rechtschreibung/Grammatik", sec_en:"Englisch — Rechtschreibung/Grammatik", sec_tr:"Übersetzungsfehler",
@@ -1197,7 +1198,7 @@ const I18N = {
     tab_analyse:"Analysis",
     an2_sub:"Checks German and English text for spelling, sentence structure and grammar, and flags translation errors between the two versions. For the translation check, both fields should contain the same ticket version in DE and EN.",
     an2_de:"German text", an2_en:"English text", an2_run:"Analyse", an2_ex:"Load examples",
-    an2_white:"Own terms / product names (do not flag as errors) — comma-separated", an2_wreset:"Reset whitelist", an2_wexp:"Export whitelist", an2_wimp:"Import whitelist",
+    an2_white:"Own terms / product names (do not flag as errors) — comma-separated", an2_wreset:"Reset whitelist", an2_wexp:"Export .txt", an2_wexpj:"Export .json", an2_wimp:"Import whitelist",
     an2_hint:"Heuristic in-browser check — not a substitute for professional proofreading.",
     an2_none:"No issues found.",
     sec_de:"German — spelling/grammar", sec_en:"English — spelling/grammar", sec_tr:"Translation errors",
@@ -2643,6 +2644,11 @@ function _wlTerms(str){ return (str||"").split(/[,;\n\r]+/).map(s=>s.trim()).fil
 function exportWhitelist(btn){
   const terms=_wlTerms(document.getElementById("an-white").value);
   downloadFile("whitelist.txt","text/plain", terms.join("\n")+"\n");
+  if(btn){ const o=btn.textContent; btn.textContent=(LANG==="de"?"Exportiert ✓":"Exported ✓"); setTimeout(()=>btn.textContent=o,1600); }
+}
+function exportWhitelistJSON(btn){
+  const terms=_wlTerms(document.getElementById("an-white").value);
+  downloadFile("whitelist.json","application/json", JSON.stringify(terms, null, 2)+"\n");
   if(btn){ const o=btn.textContent; btn.textContent=(LANG==="de"?"Exportiert ✓":"Exported ✓"); setTimeout(()=>btn.textContent=o,1600); }
 }
 function importWhitelist(input){
