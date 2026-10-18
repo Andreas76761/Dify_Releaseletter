@@ -2527,7 +2527,24 @@ const TYPOS={
   en:{"recieve":"receive","seperate":"separate","occured":"occurred","definitly":"definitely","wich":"which","adress":"address","occurence":"occurrence","untill":"until","teh":"the","alot":"a lot","accross":"across","enviroment":"environment","successfull":"successful","availabe":"available","thier":"their","becuase":"because","beleive":"believe","calender":"calendar","foward":"forward","garantee":"guarantee","independant":"independent","maintainance":"maintenance","neccessary":"necessary","occassion":"occasion","priviledge":"privilege","recomend":"recommend","refered":"referred","relevent":"relevant","publically":"publicly","succesfully":"successfully","compatibilty":"compatibility","functionalty":"functionality"}
 };
 // domain terms / product names that must NOT be flagged as errors or translation leakage
-const WHITELIST_DEFAULT=["oneSCM","ONESCM","DOT ONESCM","Dify","Jira","Xray","PI","PI TBD","Baumuster","Chassis","VIN","FIN","BTO","BTS","Built to order","Built to stock","Vehicle Management","Documents & Communications","Releaseletter","Release Letter","Mercedes-Benz","Contract Preview","Service Contract","Success Flow","Program Increment","Model Code","Order Number","First Registration","Toggle","Template","Preview","PDF","Workflow"];
+const WHITELIST_DEFAULT=[
+  // Produkt / Plattform
+  "oneSCM","ONESCM","DOT ONESCM","DOT","oneSCM Team","SCM","Supply Chain",
+  // Tooling
+  "Dify","Jira","Jira Cloud","Confluence","Xray","Xray Test Repository","n8n","Program Increment","Sprint","Epic","Backlog","Story",
+  // Module / Funktionsbereiche
+  "Vehicle Management","Documents & Communications","Product Management","Order Management","Contract Generation","Contract Preview","Contract Preview PDF","Service Contract","Master Template","Vehicle Group","Vehicle Groups","Vehicle Identifier","Success Flow","Business Flow",
+  // Automotive / Fahrzeugdaten
+  "Baumuster","Baureihe","Chassis","Chassis Number","Model Code","Order Number","First Registration","First Registration date","VIN","FIN","Licence Plate","Built to order","Built to stock","Build to order","Build to stock","BTO","BTS",
+  // Vertrieb / Aftersales
+  "Aftersales","After Sales","Spare Parts","Warranty","Homologation","Telematics","Fleet","Dealer","Retail","Werk",
+  // Organisation
+  "Mercedes-Benz","Mercedes-Benz AG","Daimler","Daimler Truck",
+  // Release / Versionen
+  "Releaseletter","Release Letter","PI","PI TBD","PI14","PI15","PI16",
+  // Allgemeine Begriffe / Abkürzungen (sollen nicht übersetzt werden)
+  "Toggle","Template","Preview","PDF","Workflow","API","URL","ID","SLA","KPI","ADF"
+];
 function whitelistWords(){
   const raw=(document.getElementById("an-white")||{}).value || WHITELIST_DEFAULT.join(", ");
   const set=new Set();
