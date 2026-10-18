@@ -454,6 +454,8 @@
       <button class="btn primary" onclick="runAnalyse()" data-i18n="an2_run">Analysieren</button>
       <button class="btn ghost" onclick="loadAnalyseExamples()" data-i18n="an2_ex">Beispiele laden</button>
       <button class="btn ghost" onclick="resetWhitelist()" data-i18n="an2_wreset">Whitelist zurücksetzen</button>
+      <button class="btn ghost" onclick="exportWhitelist(this)" data-i18n="an2_wexp">Whitelist exportieren</button>
+      <label class="btn ghost"><span data-i18n="an2_wimp">Whitelist importieren</span><input type="file" id="an-wimport" accept=".txt,.csv,.json,.md" hidden onchange="importWhitelist(this)"></label>
       <span class="spacer"></span>
       <span class="hint-inline" data-i18n="an2_hint">Heuristische Prüfung im Browser — ersetzt kein professionelles Lektorat.</span>
     </div>
@@ -1109,7 +1111,7 @@ const I18N = {
     tab_analyse:"Analyse",
     an2_sub:"Prüft deutschen und englischen Text auf Rechtschreibung, Satzstellung und Grammatik und zeigt Übersetzungsfehler zwischen beiden Versionen. Für die Übersetzungsprüfung sollten beide Felder dieselbe Ticket-Version in DE und EN enthalten.",
     an2_de:"Deutscher Text", an2_en:"Englischer Text", an2_run:"Analysieren", an2_ex:"Beispiele laden",
-    an2_white:"Eigene Begriffe / Produktnamen (nicht als Fehler werten) — kommagetrennt", an2_wreset:"Whitelist zurücksetzen",
+    an2_white:"Eigene Begriffe / Produktnamen (nicht als Fehler werten) — kommagetrennt", an2_wreset:"Whitelist zurücksetzen", an2_wexp:"Whitelist exportieren", an2_wimp:"Whitelist importieren",
     an2_hint:"Heuristische Prüfung im Browser — ersetzt kein professionelles Lektorat.",
     an2_none:"Keine Auffälligkeiten gefunden.",
     sec_de:"Deutsch — Rechtschreibung/Grammatik", sec_en:"Englisch — Rechtschreibung/Grammatik", sec_tr:"Übersetzungsfehler",
@@ -1195,7 +1197,7 @@ const I18N = {
     tab_analyse:"Analysis",
     an2_sub:"Checks German and English text for spelling, sentence structure and grammar, and flags translation errors between the two versions. For the translation check, both fields should contain the same ticket version in DE and EN.",
     an2_de:"German text", an2_en:"English text", an2_run:"Analyse", an2_ex:"Load examples",
-    an2_white:"Own terms / product names (do not flag as errors) — comma-separated", an2_wreset:"Reset whitelist",
+    an2_white:"Own terms / product names (do not flag as errors) — comma-separated", an2_wreset:"Reset whitelist", an2_wexp:"Export whitelist", an2_wimp:"Import whitelist",
     an2_hint:"Heuristic in-browser check — not a substitute for professional proofreading.",
     an2_none:"No issues found.",
     sec_de:"German — spelling/grammar", sec_en:"English — spelling/grammar", sec_tr:"Translation errors",
@@ -2637,6 +2639,32 @@ function loadAnalyseExamples(){
   runAnalyse();
 }
 function resetWhitelist(){ document.getElementById("an-white").value=WHITELIST_DEFAULT.join(", "); runAnalyse(); }
+function _wlTerms(str){ return (str||"").split(/[,;\n\r]+/).map(s=>s.trim()).filter(Boolean); }
+function exportWhitelist(btn){
+  const terms=_wlTerms(document.getElementById("an-white").value);
+  downloadFile("whitelist.txt","text/plain", terms.join("\n")+"\n");
+  if(btn){ const o=btn.textContent; btn.textContent=(LANG==="de"?"Exportiert ✓":"Exported ✓"); setTimeout(()=>btn.textContent=o,1600); }
+}
+function importWhitelist(input){
+  const f=input.files && input.files[0]; if(!f) return;
+  const de=LANG==="de"; const r=new FileReader();
+  r.onload=()=>{
+    const text=String(r.result||""); let terms=[];
+    try{ const j=JSON.parse(text); if(Array.isArray(j)) terms=j.map(String); else if(j && Array.isArray(j.whitelist)) terms=j.whitelist.map(String); }catch(e){}
+    if(!terms.length) terms=_wlTerms(text);
+    terms=terms.map(s=>s.trim()).filter(Boolean);
+    const cur=_wlTerms(document.getElementById("an-white").value);
+    const seen=new Set(cur.map(s=>s.toLowerCase())); const added=[];
+    terms.forEach(t=>{ const k=t.toLowerCase(); if(!seen.has(k)){ seen.add(k); added.push(t); } });
+    const merged=cur.concat(added);
+    document.getElementById("an-white").value=merged.join(", ");
+    input.value="";
+    runAnalyse();
+    alert(de ? (added.length+" neue(r) Begriff(e) importiert — gesamt "+merged.length+".") : (added.length+" new term(s) imported — total "+merged.length+"."));
+  };
+  r.onerror=()=>alert(de?"Datei konnte nicht gelesen werden.":"Could not read the file.");
+  r.readAsText(f);
+}
 
 function downloadEmbedded(id, fname, btn){ const el=document.getElementById(id); const txt=el?el.textContent.trim():""; downloadFile(fname,"application/json",txt); if(btn){const o=btn.textContent;btn.textContent=t("added");setTimeout(()=>btn.textContent=o,1500);} }
 
