@@ -27,7 +27,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "\n// Jira Webhook -> unser jira_text Format\nconst root = $json.body || $json;\nconst issue = root.issue || root;\nconst F = issue.fields || {};\nconst nm = o => (o && o.name) ? o.name : \"\";\nconst arr = a => Array.isArray(a) ? a : [];\nfunction adf(n){ if(!n) return \"\"; if(typeof n===\"string\") return n; let s=n.text||\"\"; if(Array.isArray(n.content)){ for(const c of n.content){ s+=adf(c); } if(n.type===\"paragraph\"||n.type===\"heading\") s+=\"\\n\"; } return s; }\nconst desc = (typeof F.description===\"string\") ? F.description : adf(F.description);\nconst links = arr(F.issuelinks).map(l=>{\n  const t = l.type ? (l.type.outward || l.type.inward || \"linked\") : \"linked\";\n  const k = (l.outwardIssue && l.outwardIssue.key) || (l.inwardIssue && l.inwardIssue.key) || \"\";\n  return k ? (t + \" \" + k) : \"\";\n}).filter(Boolean).join(\"; \");\nconst lines = [\n  \"Projekt: \" + (F.project ? (F.project.key || F.project.name || \"\") : \"\"),\n  \"Vorgang: \" + (issue.key || \"\"),\n  \"Zusammenfassung: \" + (F.summary || \"\"),\n  \"Typ: \" + nm(F.issuetype),\n  \"Status: \" + nm(F.status),\n  \"Prioritaet: \" + nm(F.priority),\n  \"Komponente: \" + arr(F.components).map(nm).join(\", \"),\n  \"Loesung: \" + nm(F.resolution),\n  \"Labels: \" + arr(F.labels).join(\", \"),\n  \"Autor: \" + (F.reporter ? (F.reporter.displayName || \"\") : \"\"),\n  \"Bearbeiter: \" + (F.assignee ? (F.assignee.displayName || \"\") : \"Nicht zugewiesen\"),\n  \"Erstellt: \" + (F.created || \"\"),\n  \"Aktualisiert: \" + (F.updated || \"\"),\n  \"Loesungsversion(en): \" + (arr(F.fixVersions).map(nm).join(\", \") || \"Keine\"),\n  \"Betrifft Version(en): \" + (arr(F.versions).map(nm).join(\", \") || \"Keine\"),\n  \"Verknuepfungen: \" + links,\n  \"Beschreibung:\",\n  desc\n];\nreturn [{ json: { jira_text: lines.join(\"\\n\"), target_language: \"both\", country: \"DE\", division: \"\", user_group: \"biz\", whitelist: \"oneSCM, ONESCM, DOT ONESCM, DOT, oneSCM Team, SCM, Supply Chain, Dify, Jira, Jira Cloud, Confluence, Xray, Xray Test Repository, n8n, Program Increment, Sprint, Epic, Backlog, Story, Vehicle Management, Documents & Communications, Product Management, Order Management, Contract Generation, Contract Preview, Contract Preview PDF, Service Contract, Master Template, Vehicle Group, Vehicle Groups, Vehicle Identifier, Success Flow, Business Flow, Baumuster, Baureihe, Chassis, Chassis Number, Model Code, Order Number, First Registration, First Registration date, VIN, FIN, Licence Plate, Built to order, Built to stock, Build to order, Build to stock, BTO, BTS, Aftersales, After Sales, Spare Parts, Warranty, Homologation, Telematics, Fleet, Dealer, Retail, Werk, Mercedes-Benz, Mercedes-Benz AG, Daimler, Daimler Truck, Releaseletter, Release Letter, PI, PI TBD, PI14, PI15, PI16, Toggle, Template, Preview, PDF, Workflow, API, URL, ID, SLA, KPI, ADF\", issue_key: issue.key || \"\" } }];\n"
+        "jsCode": "\n// Jira Webhook -> unser jira_text Format\nconst root = $json.body || $json;\nconst issue = root.issue || root;\nconst F = issue.fields || {};\nconst nm = o => (o && o.name) ? o.name : \"\";\nconst arr = a => Array.isArray(a) ? a : [];\nfunction adf(n){ if(!n) return \"\"; if(typeof n===\"string\") return n; let s=n.text||\"\"; if(Array.isArray(n.content)){ for(const c of n.content){ s+=adf(c); } if(n.type===\"paragraph\"||n.type===\"heading\") s+=\"\\n\"; } return s; }\nconst desc = (typeof F.description===\"string\") ? F.description : adf(F.description);\nconst links = arr(F.issuelinks).map(l=>{\n  const t = l.type ? (l.type.outward || l.type.inward || \"linked\") : \"linked\";\n  const k = (l.outwardIssue && l.outwardIssue.key) || (l.inwardIssue && l.inwardIssue.key) || \"\";\n  return k ? (t + \" \" + k) : \"\";\n}).filter(Boolean).join(\"; \");\n\n// --- Whitelist aus 'Load Whitelist' (URL) lesen, mit Fallback ---\nlet wlFromUrl = \"\";\ntry {\n  const _n = $('Load Whitelist').item.json;\n  let _b = (_n && _n.data !== undefined) ? _n.data : _n;\n  if (typeof _b === \"string\") { try { const _a = JSON.parse(_b); wlFromUrl = Array.isArray(_a) ? _a.join(\", \") : (_a && Array.isArray(_a.whitelist) ? _a.whitelist.join(\", \") : _b); } catch (e) { wlFromUrl = _b; } }\n  else if (Array.isArray(_b)) wlFromUrl = _b.join(\", \");\n  else if (_b && Array.isArray(_b.whitelist)) wlFromUrl = _b.whitelist.join(\", \");\n} catch (e) {}\nconst wlPick = ([...new Set(String(wlFromUrl || \"\").split(/[,;\\n]+/).map(s=>s.trim()).filter(Boolean))].join(\", \") || \"oneSCM, ONESCM, DOT ONESCM, DOT, oneSCM Team, SCM, Supply Chain, Dify, Jira, Jira Cloud, Confluence, Xray, Xray Test Repository, n8n, Program Increment, Sprint, Epic, Backlog, Story, Vehicle Management, Documents & Communications, Product Management, Order Management, Contract Generation, Contract Preview, Contract Preview PDF, Service Contract, Master Template, Vehicle Group, Vehicle Groups, Vehicle Identifier, Success Flow, Business Flow, Baumuster, Baureihe, Chassis, Chassis Number, Model Code, Order Number, First Registration, First Registration date, VIN, FIN, Licence Plate, Built to order, Built to stock, Build to order, Build to stock, BTO, BTS, Aftersales, After Sales, Spare Parts, Warranty, Homologation, Telematics, Fleet, Dealer, Retail, Werk, Mercedes-Benz, Mercedes-Benz AG, Daimler, Daimler Truck, Releaseletter, Release Letter, PI, PI TBD, PI14, PI15, PI16, Toggle, Template, Preview, PDF, Workflow, API, URL, ID, SLA, KPI, ADF\");\nconst lines = [\n  \"Projekt: \" + (F.project ? (F.project.key || F.project.name || \"\") : \"\"),\n  \"Vorgang: \" + (issue.key || \"\"),\n  \"Zusammenfassung: \" + (F.summary || \"\"),\n  \"Typ: \" + nm(F.issuetype),\n  \"Status: \" + nm(F.status),\n  \"Prioritaet: \" + nm(F.priority),\n  \"Komponente: \" + arr(F.components).map(nm).join(\", \"),\n  \"Loesung: \" + nm(F.resolution),\n  \"Labels: \" + arr(F.labels).join(\", \"),\n  \"Autor: \" + (F.reporter ? (F.reporter.displayName || \"\") : \"\"),\n  \"Bearbeiter: \" + (F.assignee ? (F.assignee.displayName || \"\") : \"Nicht zugewiesen\"),\n  \"Erstellt: \" + (F.created || \"\"),\n  \"Aktualisiert: \" + (F.updated || \"\"),\n  \"Loesungsversion(en): \" + (arr(F.fixVersions).map(nm).join(\", \") || \"Keine\"),\n  \"Betrifft Version(en): \" + (arr(F.versions).map(nm).join(\", \") || \"Keine\"),\n  \"Verknuepfungen: \" + links,\n  \"Beschreibung:\",\n  desc\n];\nreturn [{ json: { jira_text: lines.join(\"\\n\"), target_language: \"both\", country: \"DE\", division: \"\", user_group: \"biz\", whitelist: wlPick, issue_key: issue.key || \"\" } }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -62,6 +62,27 @@
           "name": "Dify API (Header Auth)"
         }
       }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WHITELIST_URL || \"https://raw.githubusercontent.com/Andreas76761/Dify_Releaseletter/main/whitelist.json\" }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        -170
+      ],
+      "id": "load-whitelist",
+      "name": "Load Whitelist",
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -69,7 +90,7 @@
       "main": [
         [
           {
-            "node": "Jira -> Text",
+            "node": "Load Whitelist",
             "type": "main",
             "index": 0
           }
@@ -81,6 +102,17 @@
         [
           {
             "node": "Dify Workflow ausfuehren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Whitelist": {
+      "main": [
+        [
+          {
+            "node": "Jira -> Text",
             "type": "main",
             "index": 0
           }
