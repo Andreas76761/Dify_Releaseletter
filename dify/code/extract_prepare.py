@@ -42,7 +42,7 @@ def _is_none(v):
 
 
 def main(jira_text: str, target_language: str = "both", country: str = "DE",
-         division: str = "", user_group: str = "biz") -> dict:
+         division: str = "", user_group: str = "biz", whitelist: str = "") -> dict:
     text = jira_text or ""
     f = _extract(text)
 
@@ -123,6 +123,7 @@ def main(jira_text: str, target_language: str = "both", country: str = "DE",
     if pii_found != "keine":
         warnings.append("Personenbezogene Daten vorhanden → anonymisieren: %s" % pii_found)
 
+    wl = ", ".join(t.strip() for t in re.split(r"[,;\n]+", whitelist or "") if t.strip()) or 'oneSCM, ONESCM, DOT ONESCM, DOT, oneSCM Team, SCM, Supply Chain, Dify, Jira, Jira Cloud, Confluence, Xray, Xray Test Repository, n8n, Program Increment, Sprint, Epic, Backlog, Story, Vehicle Management, Documents & Communications, Product Management, Order Management, Contract Generation, Contract Preview, Contract Preview PDF, Service Contract, Master Template, Vehicle Group, Vehicle Groups, Vehicle Identifier, Success Flow, Business Flow, Baumuster, Baureihe, Chassis, Chassis Number, Model Code, Order Number, First Registration, First Registration date, VIN, FIN, Licence Plate, Built to order, Built to stock, Build to order, Build to stock, BTO, BTS, Aftersales, After Sales, Spare Parts, Warranty, Homologation, Telematics, Fleet, Dealer, Retail, Werk, Mercedes-Benz, Mercedes-Benz AG, Daimler, Daimler Truck, Releaseletter, Release Letter, PI, PI TBD, PI14, PI15, PI16, Toggle, Template, Preview, PDF, Workflow, API, URL, ID, SLA, KPI, ADF'
     return {
         "facts": facts,
         "pi_label": pi_label,
@@ -131,5 +132,6 @@ def main(jira_text: str, target_language: str = "both", country: str = "DE",
         "pii_found": pii_found,
         "guidance": guidance,
         "warnings": "\n".join("- " + w for w in warnings) if warnings else "- keine",
+        "whitelist": wl,
         "target_language": target_language or "both",
     }

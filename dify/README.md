@@ -9,6 +9,7 @@ Erzeugt aus einem **Jira-Ticket** direkt beim Generieren einen **belegten Releas
 | `releaseletter_pipeline.yml` | Importierbare Dify-Workflow-DSL (kompletter Graph inkl. Code + Prompts) |
 | `code/extract_prepare.py` | Code-Node „Extract & Prepare" (deterministische Extraktion + Guardrails) |
 | `code/pii_scrub.py` | Code-Node „PII-Scrub" (Sicherheitsnetz nach dem LLM) |
+| `jira_trigger.md` | Echter Jira-Trigger (n8n-Brücke **oder** Jira-Automation → Dify-API) |
 
 ## Import in Dify
 
@@ -33,6 +34,7 @@ Start ─▶ Extract & Prepare (Code) ─▶ Releaseletter DE (LLM) ─▶ Über
 | `country` | Text | Land/Markt (z. B. DE, FR …) — beeinflusst Zielgruppen-Hinweis |
 | `division` | Text | Sparte |
 | `user_group` | Select `mgmt/biz/it/end` | Detailgrad/Ton |
+| `whitelist` | Paragraph | Produkt-/Fachbegriffe (komma-/zeilengetrennt), die der LLM **unverändert** lassen soll — vorbefüllt mit der Standardliste; identisch zur App (Export `whitelist.json`). |
 
 ## Ausgaben (End-Node)
 
@@ -78,6 +80,7 @@ Mappt die Endausgaben (siehe oben).
 | Phantom-Tickets aus Verknüpfungen | `linked_ids` (Code) + Regel 3 (Prompt) |
 | Status/Typ verfälscht | „wörtlich"/„Testfall/Validierung" (Code+Prompt, Regel 4) |
 | Personenbezogene Daten | Regel 5 (Prompt) + **PII-Scrub-Code** als Netz |
+| Produktbegriffe werden übersetzt/verfälscht | `whitelist` → Extract-Output + Regel 6 im DE-Prompt und „keep unchanged" im EN-/Summary-Prompt |
 
 ## Test-Eingabe (ONESCM-10263)
 

@@ -114,6 +114,12 @@ workflow:
               required: false
               default: biz
               options: [mgmt, biz, it, end]
+            - variable: whitelist
+              label: Produktbegriffe (Whitelist, nicht uebersetzen)
+              type: paragraph
+              required: false
+              max_length: 8000
+              default: "oneSCM, ONESCM, DOT ONESCM, DOT, oneSCM Team, SCM, Supply Chain, Dify, Jira, Jira Cloud, Confluence, Xray, Xray Test Repository, n8n, Program Increment, Sprint, Epic, Backlog, Story, Vehicle Management, Documents & Communications, Product Management, Order Management, Contract Generation, Contract Preview, Contract Preview PDF, Service Contract, Master Template, Vehicle Group, Vehicle Groups, Vehicle Identifier, Success Flow, Business Flow, Baumuster, Baureihe, Chassis, Chassis Number, Model Code, Order Number, First Registration, First Registration date, VIN, FIN, Licence Plate, Built to order, Built to stock, Build to order, Build to stock, BTO, BTS, Aftersales, After Sales, Spare Parts, Warranty, Homologation, Telematics, Fleet, Dealer, Retail, Werk, Mercedes-Benz, Mercedes-Benz AG, Daimler, Daimler Truck, Releaseletter, Release Letter, PI, PI TBD, PI14, PI15, PI16, Toggle, Template, Preview, PDF, Workflow, API, URL, ID, SLA, KPI, ADF"
       - id: extract
         type: custom
         position: { x: 340, y: 260 }
@@ -133,6 +139,8 @@ workflow:
               value_selector: [start, division]
             - variable: user_group
               value_selector: [start, user_group]
+            - variable: whitelist
+              value_selector: [start, whitelist]
           outputs:
             facts: { type: string }
             pi_label: { type: string }
@@ -141,6 +149,7 @@ workflow:
             pii_found: { type: string }
             guidance: { type: string }
             warnings: { type: string }
+            whitelist: { type: string }
             target_language: { type: string }
           code: |
             import re
@@ -171,7 +180,7 @@ workflow:
                 return out
             def _is_none(v):
                 return (not v) or bool(re.search(r"keine|none", v, re.I))
-            def main(jira_text, target_language="both", country="DE", division="", user_group="biz"):
+            def main(jira_text, target_language="both", country="DE", division="", user_group="biz", whitelist=""):
                 text = jira_text or ""
                 f = _extract(text)
                 no_version = _is_none(f.get("fixversion","")) and _is_none(f.get("affected",""))
@@ -217,9 +226,11 @@ workflow:
                 if no_version: w.append("Keine Version in Quelle -> PI TBD, keine PI erfinden.")
                 if linked_ids: w.append("Verlinkte Tickets NICHT als Inhalt/Scope: %s" % linked_ids)
                 if pii_found != "keine": w.append("Personenbezogene Daten vorhanden -> anonymisieren: %s" % pii_found)
+                wl = ", ".join([t.strip() for t in re.split(r"[,;\n]+", whitelist or "") if t.strip()]) or "oneSCM, ONESCM, DOT ONESCM, DOT, oneSCM Team, SCM, Supply Chain, Dify, Jira, Jira Cloud, Confluence, Xray, Xray Test Repository, n8n, Program Increment, Sprint, Epic, Backlog, Story, Vehicle Management, Documents & Communications, Product Management, Order Management, Contract Generation, Contract Preview, Contract Preview PDF, Service Contract, Master Template, Vehicle Group, Vehicle Groups, Vehicle Identifier, Success Flow, Business Flow, Baumuster, Baureihe, Chassis, Chassis Number, Model Code, Order Number, First Registration, First Registration date, VIN, FIN, Licence Plate, Built to order, Built to stock, Build to order, Build to stock, BTO, BTS, Aftersales, After Sales, Spare Parts, Warranty, Homologation, Telematics, Fleet, Dealer, Retail, Werk, Mercedes-Benz, Mercedes-Benz AG, Daimler, Daimler Truck, Releaseletter, Release Letter, PI, PI TBD, PI14, PI15, PI16, Toggle, Template, Preview, PDF, Workflow, API, URL, ID, SLA, KPI, ADF"
                 return {"facts": facts, "pi_label": pi_label, "report_date": report_date,
                         "linked_ids": linked_ids or "keine", "pii_found": pii_found,
                         "guidance": guidance, "warnings": "\n".join("- " + x for x in w) if w else "- keine",
+                        "whitelist": wl,
                         "target_language": target_language or "both"}
       - id: llm_de
         type: custom
@@ -250,6 +261,7 @@ workflow:
                    niemals "Feature"). Nicht durch Quelle belegte Nutzen-/Business-Aussagen mit "[redaktionell]" kennzeichnen.
                 5) DATENSCHUTZ: Keine personenbezogenen Daten (Namen, E-Mail, FIN/VIN, Kennzeichen, User-ID).
                    Als Verfasser immer "oneSCM Team". Hinweis der Vorpruefung: {{#extract.pii_found#}}.
+                6) PRODUKTBEGRIFFE: Lasse diese Begriffe EXAKT und UNVERAENDERT (nicht uebersetzen/umformulieren/abkuerzen): {{#extract.whitelist#}}.
 
                 ZIELGRUPPE: {{#extract.guidance#}}
                 PRUEFHINWEISE:
@@ -282,7 +294,7 @@ workflow:
               text: |
                 Translate the following German release letter into precise, professional English.
                 Keep ALL facts, numbers, IDs, dates and the version label identical. Do not add or remove content.
-                Keep proper nouns and product terms (oneSCM, ONESCM-..., Xray, Baumuster, VIN/FIN, Built to order/stock) unchanged.
+                Keep the following product/domain terms EXACTLY as written, do not translate or rephrase them: {{#extract.whitelist#}}.
                 Keep any "[redaktionell]" marker as "[editorial]".
             - role: user
               text: |
@@ -306,6 +318,7 @@ workflow:
             - role: system
               text: |
                 Fasse den Ticket-Inhalt neutral und belegt zusammen. Erfinde nichts. Nutze nur die Fakten.
+                Lasse Produktbegriffe ({{#extract.whitelist#}}) unveraendert.
                 Gib GENAU dieses Format aus:
                 DE: <2-3 Saetze deutsch>
                 EN: <2-3 sentences english>
