@@ -638,7 +638,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WHITELIST_URL || \"https://raw.githubusercontent.com/Andreas76761/Dify_Releaseletter/main/whitelist.json\" }}",
+        "url": "={{ $env.WHITELIST_URL || \"https://intranet.example.com/oneSCM/whitelist.json\" }}",
         "options": {
           "response": {
             "response": {
@@ -893,7 +893,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WHITELIST_URL || \"https://raw.githubusercontent.com/Andreas76761/Dify_Releaseletter/main/whitelist.json\" }}",
+        "url": "={{ $env.WHITELIST_URL || \"https://intranet.example.com/oneSCM/whitelist.json\" }}",
         "options": {
           "response": {
             "response": {
@@ -1070,7 +1070,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WHITELIST_URL || \"https://raw.githubusercontent.com/Andreas76761/Dify_Releaseletter/main/whitelist.json\" }}",
+        "url": "={{ $env.WHITELIST_URL || \"https://intranet.example.com/oneSCM/whitelist.json\" }}",
         "options": {
           "response": {
             "response": {
@@ -1225,7 +1225,7 @@ const I18N = {
     n8_steps_h:"Import in n8n",
     n8_s1:"n8n öffnen → Workflows → Import from File → die heruntergeladene JSON wählen.",
     n8_s2:"In den drei HTTP-Nodes eine Credential »HTTP Header Auth« hinterlegen (Authorization: Bearer <API-Key>).",
-    n8_s3:"Optional Umgebungsvariablen setzen: LLM_API_URL (Standard: OpenAI-kompatibel), LLM_MODEL (Standard: gpt-4o) und WHITELIST_URL (lädt whitelist.json; Standard: GitHub-Raw). Der Node »Load Whitelist« holt die Begriffe automatisch von dieser URL (mit Fallback).",
+    n8_s3:"Optional Umgebungsvariablen setzen: LLM_API_URL (Standard: OpenAI-kompatibel), LLM_MODEL (Standard: gpt-4o) und WHITELIST_URL (lädt whitelist.json; Standard: interner Platzhalter intranet.example.com). Der Node »Load Whitelist« holt die Begriffe automatisch von dieser URL (mit Fallback).",
     n8_s4:"Im Node »Eingabe (Beispiel)« euer Jira-Ticket einfügen oder den Node durch einen Webhook-/Jira-Trigger ersetzen → Execute Workflow.",
     n8_note:"Die HTTP-Nodes erwarten eine OpenAI-kompatible Chat-Completions-API (Antwortpfad choices[0].message.content). Für abweichende Anbieter den Pfad im letzten Code-Node anpassen.",
     n8_guard:"Guardrails identisch zur Dify-Pipeline: Datum aus »Erstellt«, PI TBD statt erfundener Version, verlinkte Tickets nicht als Inhalt, Status/Typ wahrheitsgemäß, PII-Scrub als Netz.",
@@ -1311,7 +1311,7 @@ const I18N = {
     n8_steps_h:"Import into n8n",
     n8_s1:"Open n8n → Workflows → Import from File → choose the downloaded JSON.",
     n8_s2:"In the three HTTP nodes attach an \"HTTP Header Auth\" credential (Authorization: Bearer <API key>).",
-    n8_s3:"Optionally set environment variables: LLM_API_URL (default: OpenAI-compatible), LLM_MODEL (default: gpt-4o) and WHITELIST_URL (loads whitelist.json; default: GitHub raw). The »Load Whitelist« node fetches the terms automatically from that URL (with fallback).",
+    n8_s3:"Optionally set environment variables: LLM_API_URL (default: OpenAI-compatible), LLM_MODEL (default: gpt-4o) and WHITELIST_URL (loads whitelist.json; default: internal placeholder intranet.example.com). The »Load Whitelist« node fetches the terms automatically from that URL (with fallback).",
     n8_s4:"In the \"Eingabe (Beispiel)\" node paste your Jira ticket or replace it with a webhook/Jira trigger → Execute Workflow.",
     n8_note:"The HTTP nodes expect an OpenAI-compatible chat-completions API (response path choices[0].message.content). For other providers adjust the path in the last code node.",
     n8_guard:"Guardrails identical to the Dify pipeline: date from \"Created\", PI TBD instead of an invented version, linked tickets not as content, truthful status/type, PII scrub as a net.",

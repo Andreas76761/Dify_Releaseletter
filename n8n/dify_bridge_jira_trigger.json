@@ -65,7 +65,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.WHITELIST_URL || \"https://raw.githubusercontent.com/Andreas76761/Dify_Releaseletter/main/whitelist.json\" }}",
+        "url": "={{ $env.WHITELIST_URL || \"https://intranet.example.com/oneSCM/whitelist.json\" }}",
         "options": {
           "response": {
             "response": {
